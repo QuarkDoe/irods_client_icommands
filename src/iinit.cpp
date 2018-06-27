@@ -6,6 +6,7 @@
 #include "parseCommandLine.h"
 #include "rcMisc.h"
 #include "rodsClient.h"
+#include "rcConnect.h"
 
 // =-=-=-=-=-=-=-
 #include "irods_native_auth_object.hpp"
@@ -39,6 +40,7 @@ void usageTTL();
 
 #define TTYBUF_LEN 100
 #define UPDATE_TEXT_LEN NAME_LEN*10
+const char *AUTH_OPENID_SCHEME = "openid";
 
 /*
  Attempt to make the ~/.irods directory in case it doesn't exist (may
@@ -266,6 +268,9 @@ main( int argc, char **argv ) {
         ::tolower );
 
     int useGsi = 0;
+    if ( AUTH_OPENID_SCHEME == lower_scheme ) {
+        doPassword = 0;
+    }
     if ( irods::AUTH_GSI_SCHEME == lower_scheme ) {
         useGsi = 1;
         doPassword = 0;
@@ -341,39 +346,49 @@ main( int argc, char **argv ) {
         // if this succeeded, do the regular login below to check
         // that the generated password works properly.
     } // if pam
-
-    // =-=-=-=-=-=-=-
-    // since we might be using PAM
-    // and check that the user/password is OK
-    const char* auth_scheme = ( pam_flg ) ?
+    
+    if ( strcmp( my_env.rodsAuthScheme, AUTH_OPENID_SCHEME ) == 0 ) {
+        std::string client_provider_cfg;
+        try {
+            client_provider_cfg = irods::get_environment_property<std::string&>("openid_provider");
+        }
+        catch( const irods::error& e ) {
+            rodsLog( LOG_DEBUG, "openid_provider not defined" );
+            return 1;
+        }
+        irods::kvp_map_t ctx_map;
+        ctx_map["provider"] = client_provider_cfg;
+        std::string ctx_str = irods::escaped_kvp_string( ctx_map );
+        status = clientLoginOpenID( Conn, ctx_str.c_str(), 1 );
+    }
+    else {
+        // =-=-=-=-=-=-=-
+        // since we might be using PAM
+        // and check that the user/password is OK
+        const char* auth_scheme = ( pam_flg ) ?
                               irods::AUTH_NATIVE_SCHEME.c_str() :
                               my_env.rodsAuthScheme;
-    status = clientLogin( Conn, 0, auth_scheme );
-    if ( status != 0 ) {
-
-
-        rcDisconnect( Conn );
-        return 7;
-    }
-
-    printErrorStack( Conn->rError );
-    if ( ttl > 0 && !pam_flg ) {
-        /* if doing non-PAM TTL, now get the
-        short-term password (after initial login) */
-        status = clientLoginTTL( Conn, ttl );
+        status = clientLogin( Conn, 0, auth_scheme );
         if ( status != 0 ) {
-
-
-            rcDisconnect( Conn );
-            return 8;
-        }
-        /* And check that it works */
-        status = clientLogin( Conn );
-        if ( status != 0 ) {
-
-
             rcDisconnect( Conn );
             return 7;
+        }
+
+        printErrorStack( Conn->rError );
+        if ( ttl > 0 && !pam_flg ) {
+            /* if doing non-PAM TTL, now get the
+            short-term password (after initial login) */
+            status = clientLoginTTL( Conn, ttl );
+            if ( status != 0 ) {
+                rcDisconnect( Conn );
+                return 8;
+            }
+            /* And check that it works */
+            status = clientLogin( Conn );
+            if ( status != 0 ) {
+                rcDisconnect( Conn );
+                return 7;
+            }
         }
     }
 
@@ -436,15 +451,18 @@ main( int argc, char **argv ) {
 void usage( char *prog ) {
     printf( "Creates a file containing your iRODS password in a scrambled form,\n" );
     printf( "to be used automatically by the icommands.\n" );
-    printf( "Usage: %s [-ehvVl] [--ttl TimeToLive]\n", prog );
+    printf( "Usage: %s [-ehvVl] [--ttl TimeToLive] [password]\n", prog );
     printf( " -e  echo the password as you enter it (normally there is no echo)\n" );
     printf( " -l  list the iRODS environment variables (only)\n" );
     printf( " -v  verbose\n" );
     printf( " -V  Very verbose\n" );
     printf( "--ttl ttl  set the password Time To Live (specified in hours)\n" );
     printf( "           Run 'iinit -h --ttl' for more\n" );
-
     printf( " -h  this help\n" );
+    printf( "\n" );
+    printf( "Note that the password will be in clear-text if provided via the\n" );
+    printf( "command line.  Providing the password this way will bypass the\n" );
+    printf( "password prompt.\n" );
     printReleaseInfo( "iinit" );
 }
 
