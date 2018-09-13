@@ -51,7 +51,7 @@ else( NOT HAVE_ZMQ_HPP )
 	message( STATUS "Found zmq.hpp. HAVE_ZMQ_HPP : ${HAVE_ZMQ_HPP}" )
 endif( NOT HAVE_ZMQ_HPP )
 
-find_package( IRODS 4.2.3 EXACT REQUIRED CONFIG )
+find_package( IRODS 4.2.4 EXACT REQUIRED CONFIG )
 
 message( STATUS "iRODS found" )
 # message( STATUS "IRODS_TARGETS_PATH ${IRODS_TARGETS_PATH}" )
