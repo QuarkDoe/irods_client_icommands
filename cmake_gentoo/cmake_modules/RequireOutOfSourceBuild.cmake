@@ -4,7 +4,7 @@
 #
 
 get_filename_component(_cm_src "${CMAKE_SOURCE_DIR}" ABSOLUTE)
-get_filename_component(_ir_src "${IRODS_SOURCE_DIR}" ABSOLUTE)
+get_filename_component(_ir_src "${ICOMMANDS_SOURCE_DIR}" ABSOLUTE)
 get_filename_component(_cm_bin "${CMAKE_BINARY_DIR}" ABSOLUTE)
 
 # message( STATUS "_cm_src:${_cm_src}" )
